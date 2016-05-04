@@ -1,9 +1,10 @@
 #0.Libraries
 #library(pubBonneryLahiriTran2016)
-
 library(dataASPEP)
 library(sqldf)
 library(R2jags)
+library(lme4)
+library(ggplot2)
 #1. Data
 levels(aspep2007_census$type)
 levels(aspep2012_census$type)
@@ -11,10 +12,10 @@ levels(aspep2011_sample$type)
 aspep2011_sample$type=substr(as.character(aspep2011_sample$id),3,1)
 
 asp<-sqldf("select b.type,b.itemcode,b.state,log(1+b.ftemp) as lftemp, log(1+a.ftemp) as lftemp07 from 
-aspep2007_census a, 
-aspep2012_census b,
-aspep2011_sample c
-where a.id=b.id and a.id=c.id")
+           aspep2007_census a, 
+           aspep2012_census b,
+           aspep2011_sample c
+           where a.id=b.id and a.id=c.id")
 asp$type=as.factor(asp$type)
 asp$itemcode=as.factor(asp$itemcode)
 save(asp,file="data/asp.rda")
@@ -22,9 +23,9 @@ load("data/asp.rda")
 
 
 asp2<-sqldf("select b.id,b.type,b.itemcode,b.state, log(1+b.ftemp) as lftemp, log(1+a.ftemp) as lftemp07 from 
-aspep2007_census a, 
-aspep2012_census b
-where a.id=b.id")
+            aspep2007_census a, 
+            aspep2012_census b
+            where a.id=b.id")
 asp2<-asp2[!is.element(asp2$id,aspep2011_sample$id),]
 
 save(asp2,file="data/asp2.rda")
@@ -36,37 +37,42 @@ save(summarytab,file="data/summarytab.rda")
 load("data/summarytab.rda")
 #2. model selection
 
+#2.1. plot of lftemp vs lftemp07.
+plot1<-
+  ggplot(asp2, aes(x = lftemp07, y = lftemp)) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red")
+save(plot1,file="data/plot1.rda")
 
 
 #3. Computations
 usefullvariables<-c("state","itemcode","type","lftemp","lftemp07")
-#3.1. individual level
+#3.1. individual level, 
 
 N=nrow(asp);
 dime=unlist(lapply(asp2[c("state","itemcode","type")],nlevels))
 
 fit <-jags(
-    data=c(list(N=N,dime=dime),asp2[usefullvariables]),
-    inits=list(list("beta0"=array(0,dime),"beta1"=array(0,dime),"tau"=1)),
-    n.chains =1,
-    parameters.to.save=c("sigma", "beta"),
-    n.iter =10 ,
-    n.burnin =3 ,
-    model.file= textConnection (
-      "model {
-for (i in 1:N) {
-lftemp[i]~dnorm(beta0[state[i],itemcode[i],type[i]]+beta1[state[i],itemcode[i],type[i]]*lftemp07[i],tau)}
-for (i1 in 1:dime[1]) {
-  for (i2 in 1:dime[2]) {
+  data=c(list(N=N,dime=dime),asp2[usefullvariables]),
+  inits=list(list("beta0"=array(0,dime),"beta1"=array(0,dime),"tau"=1)),
+  n.chains =1,
+  parameters.to.save=c("sigma", "beta"),
+  n.iter =10 ,
+  n.burnin =3 ,
+  model.file= textConnection (
+    "model {
+    for (i in 1:N) {
+    lftemp[i]~dnorm(beta0[state[i],itemcode[i],type[i]]+beta1[state[i],itemcode[i],type[i]]*lftemp07[i],tau)}
+    for (i1 in 1:dime[1]) {
+    for (i2 in 1:dime[2]) {
     for (i3 in 1:dime[3]) {
-      beta0[i1,i2,i3]~ dnorm (0 ,1.0E-4);
-      beta1[i1,i2,i3]~ dnorm (0 ,1.0E-4);}}}
-tau~ dgamma (1.0E-4 ,1.0E-4);
-sigma <- 1/tau}"))
+    beta0[i1,i2,i3]~ dnorm (0 ,1.0E-4);
+    beta1[i1,i2,i3]~ dnorm (0 ,1.0E-4);}}}
+    tau~ dgamma (1.0E-4 ,1.0E-4);
+    sigma <- 1/tau}"))
 print(fit)
 
 
-library(R2jags)
 fit <-jags(
   data=c(list(N=nrow(summarytab),dime=dime),summarytab[usefullvariables]),
   inits=list(list("beta0"=array(0,dime),"beta1"=array(0,dime),"tau"=1)),
@@ -76,15 +82,15 @@ fit <-jags(
   n.burnin =3 ,
   model.file= textConnection (
     "model {
-for (i in 1:N) {
-lftemp[i]~dnorm(beta0[state[i],itemcode[i],type[i]]+beta1[state[i],itemcode[i],type[i]]*lftemp07[i],tau)}
-for (i1 in 1:dime[1]) {
-  for (i2 in 1:dime[2]) {
+    for (i in 1:N) {
+    lftemp[i]~dnorm(beta0[state[i],itemcode[i],type[i]]+beta1[state[i],itemcode[i],type[i]]*lftemp07[i],tau)}
+    for (i1 in 1:dime[1]) {
+    for (i2 in 1:dime[2]) {
     for (i3 in 1:dime[3]) {
-      beta0[i1,i2,i3]~ dnorm (0 ,1.0E-4);
-      beta1[i1,i2,i3]~ dnorm (0 ,1.0E-4);}}}
-tau~ dgamma (1.0E-4 ,1.0E-4);
-sigma <- 1/tau}"))
+    beta0[i1,i2,i3]~ dnorm (0 ,1.0E-4);
+    beta1[i1,i2,i3]~ dnorm (0 ,1.0E-4);}}}
+    tau~ dgamma (1.0E-4 ,1.0E-4);
+    sigma <- 1/tau}"))
 print(fit)
 
 
