@@ -1,0 +1,1 @@
+#test if the weights are perpendicular to the epsilonk
