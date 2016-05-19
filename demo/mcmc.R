@@ -1,6 +1,6 @@
 #0.Libraries
-#library(pubBonneryLahiriTran2016)
-
+library(pubBonneryLahiriTran2016)
+data(asp)
 summarytab<-sqldf("select count(*) as n, type, itemcode, state, sum(lftpay) as lftpay, sum(lftpay07) as lftpay07 from asp group by type, itemcode, state")
 save(summarytab,file="data/summarytab.rda")
 load("data/summarytab.rda")
@@ -11,28 +11,6 @@ load("data/summarytab.rda")
 usefullvariables<-c("state","id","itemcode","type","lftpay","lftpay07")
 #3.1. individual level, 
 
-N=nrow(asp);
-dime=unlist(lapply(asp[c("state","itemcode","type")],nlevels))
-
-fit<-jags(
-  data=c(list(N=N,dime=dime),asp[usefullvariables]),
-  inits=list(list("beta0"=array(0,dime),"beta1"=array(0,dime),"tau"=1)),
-  n.chains =1,
-  parameters.to.save=c("sigma", "beta0", "beta1"),
-  n.iter =10 ,
-  n.burnin =3 ,
-  model.file= textConnection (
-    "model {
-    for (i in 1:N) {
-    lftpay[i]~dnorm(beta0[state[i],itemcode[i],type[i]]+beta1[state[i],itemcode[i],type[i]]*lftpay07[i],tau)}
-    for (i1 in 1:dime[1]) {
-    for (i2 in 1:dime[2]) {
-    for (i3 in 1:dime[3]) {
-    beta0[i1,i2,i3]~ dnorm (0 ,1.0E-4);
-    beta1[i1,i2,i3]~ dnorm (0 ,1.0E-4);}}}
-    tau~ dgamma (1.0E-4 ,1.0E-4);
-    sigma <- 1/tau}"))
-print(fit)
 
 
 fit <-jags(

@@ -1,6 +1,6 @@
-library(dataASPEP)
+Extract_years_0712_for_11_sample<-function(){
 data(aspep2007,aspep2011,aspep2012,aspep2007_gov)
-asp<-sqldf::sqldf("
+sqldf::sqldf("
 select a.id,
   d.type_of_gov,
   b.itemcode,
@@ -16,4 +16,4 @@ from
       and a.id=c.id
       and a.id=d.id 
       and a.itemcode=b.itemcode  
-      and a.itemcode=c.itemcode")
+      and a.itemcode=c.itemcode")}

@@ -1,3 +1,5 @@
+asp<-Extract_years_0712_for_11_sample()
+library(ggplot2)
 plot1<-
   ggplot(asp, aes(x = lftpay07, y = lftpay)) + 
   geom_point() +
