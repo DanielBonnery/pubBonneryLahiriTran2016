@@ -1,37 +1,119 @@
 #0.Libraries
 library(pubBonneryLahiriTran2016)
-data(asp)
-summarytab<-sqldf("select count(*) as n, type, itemcode, state, sum(lftpay) as lftpay, sum(lftpay07) as lftpay07 from asp group by type, itemcode, state")
-save(summarytab,file="data/summarytab.rda")
+library(sqldf)
+library(R2jags)
+library(dataASPEP)
+library(ggplot2)
+data(aspep2007,aspep2011,aspep2012,aspep2007_gov)
+#Create a table for the sample
+xys<-sqldf::sqldf("
+select a.id,
+  d.type_of_gov,
+  b.itemcode,
+  d.state,
+  c.ftpay, 
+  log10(1+a.ftpay) as lftpay07 ,
+  log10(1+c.ftpay) as lftpay12
+from 
+   aspep2007 a,
+   aspep2011 b,
+   aspep2012 c,
+   aspep2007_gov d
+   where a.id=b.id 
+      and a.id=c.id
+      and a.id=d.id 
+      and a.itemcode=b.itemcode  
+      and a.itemcode=c.itemcode")
+
+#Create a table for the population
+xy<-sqldf::sqldf("
+select a.id,
+  d.type_of_gov,
+  a.itemcode,
+  d.state,
+  c.ftpay,
+  log10(1+a.ftpay) as lftpay07, 
+  log10(1+c.ftpay) as lftpay12 
+from 
+   aspep2007 a,
+   aspep2012 c,
+   aspep2007_gov d
+   where  a.id=c.id
+      and a.id=d.id 
+      and a.itemcode=c.itemcode")
+
+xr<-sqldf::sqldf("select * from xy except  select * from xys")
+
+toto=function(d){c(lftpay07=sum(d$lftpay07),
+                   ftpay07=sum(d$ftpay07),
+                   lftpay12=sum(d$lftpay12),
+                   ftpay12=sum(d$ftpay12))}
+#Aggregate.
+xys_aggr<-plyr::daply(.data=xys,.variables=~state+itemcode+type_of_gov,.fun = toto)
+xys_aggr[is.na(xys_aggr)]<-0
+xy_aggr<-plyr::daply(.data=xy,.variables=~state+itemcode+type_of_gov,.fun = toto)
+xy_aggr[is.na(xy_aggr)]<-0
+xr_aggr<-xy_aggr-xys_aggr
+
+xys_aggrd<-sqldf("select count(*) as n, state,itemcode, type_of_gov, sum(lftpay12) as lftpay12, sum(lftpay07) as lftpay07 
+                 from xys group by type_of_gov, itemcode, state")
+
+save(xy_aggr,xys_aggr,xy_aggrd,xr_aggr,file="data/summarytab.rda")
 load("data/summarytab.rda")
 #2. model selection
 #2.1. plot of lftpay vs lftpay07.
 
 #3. Computations
-usefullvariables<-c("state","id","itemcode","type","lftpay","lftpay07")
-#3.1. individual level, 
-
-
-
-fit <-jags(
-  data=c(list(N=nrow(summarytab),dime=dime),summarytab[usefullvariables]),
-  inits=list(list("beta0"=array(0,dime),"beta1"=array(0,dime),"tau"=1)),
+usefullvariables<-c("state","itemcode","type_of_gov","lftpay12","lftpay07")
+dime<-sapply(xys[c("state","itemcode","type_of_gov")],nlevels)
+dimnamesd<-sapply(xys[c("state","itemcode","type_of_gov")],levels)
+#3.1. basic model to test that everything is fine
+fit1 <-jags(
+  data=c(list(N=nrow(xys_aggrd),dime=dime),xys_aggrd[usefullvariables]),
+  inits=list(list("beta0"=array(0,dime),"beta1"=array(1,dime),"tau"=1)),
   n.chains =1,
   parameters.to.save=c("sigma", "beta0", "beta1"),
-  n.iter =10 ,
+  n.iter =10,
   n.burnin =3 ,
   model.file= textConnection (
     "model {
     for (i in 1:N) {
-    lftpay[i]~dnorm(beta0[state[i],itemcode[i],type[i]]+beta1[state[i],itemcode[i],type[i]]*lftpay07[i],tau)}
+    lftpay12[i]~dnorm(beta0[state[i],itemcode[i],type_of_gov[i]]+beta1[state[i],itemcode[i],type_of_gov[i]]*lftpay07[i],tau)}
     for (i1 in 1:dime[1]) {
     for (i2 in 1:dime[2]) {
     for (i3 in 1:dime[3]) {
     beta0[i1,i2,i3]~ dnorm (0 ,1.0E-4);
-    beta1[i1,i2,i3]~ dnorm (0 ,1.0E-4);}}}
+    beta1[i1,i2,i3]~ dnorm (1 ,1.0E-4);}}}
     tau~ dgamma (1.0E-4 ,1.0E-4);
-    sigma <- 1/tau}"))
-print(fit)
+    sigma <- 1/tau
+    }"))
+
+
+d=xr[xr$state=="Alabama"&xr$itemcode=="Water Supply " &xr$type_of_gov=="Municipal government",]
+fit=fit1
+sims.list<-fit$BUGSoutput$sims.list
+predictions<-function(sims.list){
+  n<-dim(sims.list$beta0)[1]
+  i=1
+  attach(sims.list)
+  dimnames(beta0)<-c(list(NULL),dimnamesd)
+  dimnames(beta1)<-c(list(NULL),dimnamesd)
+  plyr::aaply(1:n,1,function(i){
+    prediction=xy_aggr[,,,"ftpay"]+
+        plyr::daply(xr,.variables=~state+itemcode+type_of_gov,.fun = function(d){
+          state=levels(d$state)[unique(d$state)]
+          itemcode=levels(d$itemcode)[unique(d$itemcode)]
+          type_of_gov=levels(d$type_of_gov)[unique(d$type_of_gov)]
+          if(nrow(d)>0){
+          sum(10^(beta0[i,state,itemcode,type_of_gov]+
+            beta1[i,state,itemcode,type_of_gov]*d$lftpay07+
+            rnorm(nrow(d),sd=sigma[i]))-1)}else{0}
+        })})}
+
+AA<-predictions(sims.list)
+plot1<-lattice::densityplot(AA[,2,1,2])
+
+
 
 
 #see 2006 gelman paper on inverted gamma that does not work see own suggestion of gelman
@@ -39,25 +121,61 @@ print(fit)
 # see 2005 annals of statistics analysis of variance how to do it.
 # see half normal , but make sure that difference of 1 means big thing.
 
-library(R2jags)
-modelstring<-"
-model{
-for (i in 1:N) {
-lftpay[i]~dnorm(beta0[itemcode[i],type[i]]+beta1[itemcode[i],type[i]]*lftpay07[i],tau)}
-  for (i2 in 1:dime[1]) {
-    for (i3 in 1:dime[2]) {
-      beta0[i2,i3]~dnorm (0 ,1.0E-4);
-      beta1[i2,i3]~dnorm (0 ,1.0E-4);}}
-tau~dgamma(1.0E-4,1.0E-4);
-sigma<-1/tau
-}
-"
-fit <-jags(
+#3.2. model we discussed
+fit2 <-jags(
+  data=c(list(N=nrow(xys),dime=dime,xr_aggr=xr_aggr,xy_aggr=xy_aggr),xy_aggrd[usefullvariables]),
+  inits=list(list("a1"=array(0,dime),"beta1"=array(0,dime),"tau"=1)),
   n.chains =1,
-  parameters.to.save=c("sigma", "beta0", "beta1"),
+  parameters.to.save=c("sigma","beta0", "beta1"),
   n.iter =10 ,
-  n.burnin =3,
-  data=c(list(N=sum(summarytab$state==30),dime=dime[-1]),summarytab[summarytab$state==30,]),
-  inits=list(list("beta0"=array(0,dime[-1]),"beta1"=array(0,dime[-1]),"tau"=1)),
-  model.file=textConnection (modelstring))
-print(fit)
+  n.burnin =3 ,
+  model.file= textConnection (
+    "model {
+    for (i in 1:N) {
+    lftpay[i]~dnorm(beta0[state[i],itemcode[i],type_of_gov[i]]+beta1[state[i],itemcode[i],type_of_gov[i]]*lftpay07[i],tau)}
+    for (i1 in 1:dime[1]) {
+    for (i2 in 1:dime[2]) {
+    for (i3 in 1:dime[3]) {
+    beta0[i1,i2,i3]~ dnorm (a1[i1]+a2[i2]+a3[i3]+b1[i2,i3]+b2[i1,i3]+b3[i1,i2] ,1.0E-4);
+    beta1[i1,i2,i3]~ dnorm (c1[i1]+c2[i2]+c3[i3]+d1[i2,i3]+d2[i1,i3]+d3[i1,i2] ,1.0E-4);}}}
+    for (i1 in 1:dime[1]) {a1[i1]~dnorm(0,1.0E-4);c1[i1]~dnorm(0,1.0E-4)}
+    for (i2 in 1:dime[2]) {a2[i2]~dnorm(0,1.0E-4);c2[i2]~dnorm(0,1.0E-4)}
+    for (i3 in 1:dime[3]) {a3[i3]~dnorm(0,1.0E-4);c3[i3]~dnorm(0,1.0E-4)}
+    for (i1 in 1:dime[1]) {
+    for (i2 in 1:dime[2]) {}}
+for (i1 in 1:dime[1]) {
+    for (i3 in 1:dime[3]) {}}
+for (i2 in 1:dime[2]) {
+    for (i3 in 1:dime[3]) {}}
+
+
+    tau~ dgamma (1.0E-4 ,1.0E-4);
+    sigma <- 1/tau
+    }"))
+
+d=xr[xr$state=="Alabama"&xr$itemcode=="Water Supply " &xr$type_of_gov=="Municipal government",]
+fit=fit1
+sims.list<-fit$BUGSoutput$sims.list
+predictions<-function(sims.list){
+  n<-dim(sims.list$beta0)[1]
+  i=1
+  attach(sims.list)
+  dimnames(beta0)<-c(list(NULL),dimnamesd)
+  dimnames(beta1)<-c(list(NULL),dimnamesd)
+  plyr::aaply(1:n,1,function(i){
+    prediction=xy_aggr[,,,"ftpay"]+
+      plyr::daply(xr,.variables=~state+itemcode+type_of_gov,.fun = function(d){
+        state=levels(d$state)[unique(d$state)]
+        itemcode=levels(d$itemcode)[unique(d$itemcode)]
+        type_of_gov=levels(d$type_of_gov)[unique(d$type_of_gov)]
+        if(nrow(d)>0){
+          sum(10^(beta0[i,state,itemcode,type_of_gov]+
+                    beta1[i,state,itemcode,type_of_gov]*d$lftpay07+
+                    rnorm(nrow(d),sd=sigma[i]))-1)}else{0}
+      })})}
+
+AA<-predictions(sims.list)
+plot1<-lattice::densityplot(AA[,2,1,2])
+
+
+
