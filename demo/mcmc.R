@@ -99,7 +99,7 @@ predictions<-function(sims.list){
   dimnames(beta0)<-c(list(NULL),dimnamesd)
   dimnames(beta1)<-c(list(NULL),dimnamesd)
   plyr::aaply(1:n,1,function(i){
-    prediction=xy_aggr[,,,"ftpay"]+
+    prediction=xy_aggr[,,,"ftpay12"]+
         plyr::daply(xr,.variables=~state+itemcode+type_of_gov,.fun = function(d){
           state=levels(d$state)[unique(d$state)]
           itemcode=levels(d$itemcode)[unique(d$itemcode)]
@@ -113,7 +113,7 @@ predictions<-function(sims.list){
 AA<-predictions(sims.list)
 plot1<-lattice::densityplot(AA[,2,1,2])
 
-
+print(plot1)
 
 
 #see 2006 gelman paper on inverted gamma that does not work see own suggestion of gelman
