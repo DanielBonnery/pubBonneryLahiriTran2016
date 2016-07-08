@@ -23,6 +23,3 @@ library(pubBonneryLahiriTran2016)
 demo(mcmc)
 ```
 
-
-
-

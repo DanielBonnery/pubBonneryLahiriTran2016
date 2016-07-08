@@ -5,49 +5,16 @@ library(R2jags)
 library(dataASPEP)
 library(ggplot2)
 data(aspep2007,aspep2011,aspep2012,aspep2007_gov)
-#Create a table for the sample
-xys<-sqldf::sqldf("
-select a.id,
-  d.type_of_gov,
-  b.itemcode,
-  d.state,
-  c.ftpay, 
-  log10(1+a.ftpay) as lftpay07 ,
-  log10(1+c.ftpay) as lftpay12
-from 
-   aspep2007 a,
-   aspep2011 b,
-   aspep2012 c,
-   aspep2007_gov d
-   where a.id=b.id 
-      and a.id=c.id
-      and a.id=d.id 
-      and a.itemcode=b.itemcode  
-      and a.itemcode=c.itemcode")
 
-#Create a table for the population
-xy<-sqldf::sqldf("
-select a.id,
-  d.type_of_gov,
-  a.itemcode,
-  d.state,
-  c.ftpay,
-  log10(1+a.ftpay) as lftpay07, 
-  log10(1+c.ftpay) as lftpay12 
-from 
-   aspep2007 a,
-   aspep2012 c,
-   aspep2007_gov d
-   where  a.id=c.id
-      and a.id=d.id 
-      and a.itemcode=c.itemcode")
 
-xr<-sqldf::sqldf("select * from xy except  select * from xys")
 
-toto=function(d){c(lftpay07=sum(d$lftpay07),
-                   ftpay07=sum(d$ftpay07),
-                   lftpay12=sum(d$lftpay12),
-                   ftpay12=sum(d$ftpay12))}
+xys<-xysf(aspep2011,xyf())
+xr<-xrf(xyf(),xys)
+
+toto=function(d){c(lftemp07=sum(d$lftemp07),
+                   ftemp07=sum(d$ftemp07),
+                   lftemp12=sum(d$lftemp12),
+                   ftemp12=sum(d$ftemp12))}
 #Aggregate.
 xys_aggr<-plyr::daply(.data=xys,.variables=~state+itemcode+type_of_gov,.fun = toto)
 xys_aggr[is.na(xys_aggr)]<-0
@@ -55,16 +22,16 @@ xy_aggr<-plyr::daply(.data=xy,.variables=~state+itemcode+type_of_gov,.fun = toto
 xy_aggr[is.na(xy_aggr)]<-0
 xr_aggr<-xy_aggr-xys_aggr
 
-xys_aggrd<-sqldf("select count(*) as n, state,itemcode, type_of_gov, sum(lftpay12) as lftpay12, sum(lftpay07) as lftpay07 
+xys_aggrd<-sqldf("select count(*) as n, state,itemcode, type_of_gov, sum(lftemp12) as lftemp12, sum(lftemp07) as lftemp07 
                  from xys group by type_of_gov, itemcode, state")
 
 save(xy_aggr,xys_aggr,xy_aggrd,xr_aggr,file="data/summarytab.rda")
 load("data/summarytab.rda")
 #2. model selection
-#2.1. plot of lftpay vs lftpay07.
+#2.1. plot of lftemp12 vs lftemp07.
 
 #3. Computations
-usefullvariables<-c("state","itemcode","type_of_gov","lftpay12","lftpay07")
+usefullvariables<-c("state","itemcode","type_of_gov","lftemp12","lftemp07")
 dime<-sapply(xys[c("state","itemcode","type_of_gov")],nlevels)
 dimnamesd<-sapply(xys[c("state","itemcode","type_of_gov")],levels)
 #3.1. basic model to test that everything is fine
@@ -78,7 +45,7 @@ fit1 <-jags(
   model.file= textConnection (
     "model {
     for (i in 1:N) {
-    lftpay12[i]~dnorm(beta0[state[i],itemcode[i],type_of_gov[i]]+beta1[state[i],itemcode[i],type_of_gov[i]]*lftpay07[i],tau)}
+    lftemp12[i]~dnorm(beta0[state[i],itemcode[i],type_of_gov[i]]+beta1[state[i],itemcode[i],type_of_gov[i]]*lftemp07[i],tau)}
     for (i1 in 1:dime[1]) {
     for (i2 in 1:dime[2]) {
     for (i3 in 1:dime[3]) {
@@ -99,14 +66,14 @@ predictions<-function(sims.list){
   dimnames(beta0)<-c(list(NULL),dimnamesd)
   dimnames(beta1)<-c(list(NULL),dimnamesd)
   plyr::aaply(1:n,1,function(i){
-    prediction=xy_aggr[,,,"ftpay12"]+
+    prediction=xy_aggr[,,,"ftemp12"]+
         plyr::daply(xr,.variables=~state+itemcode+type_of_gov,.fun = function(d){
           state=levels(d$state)[unique(d$state)]
           itemcode=levels(d$itemcode)[unique(d$itemcode)]
           type_of_gov=levels(d$type_of_gov)[unique(d$type_of_gov)]
           if(nrow(d)>0){
           sum(10^(beta0[i,state,itemcode,type_of_gov]+
-            beta1[i,state,itemcode,type_of_gov]*d$lftpay07+
+            beta1[i,state,itemcode,type_of_gov]*d$lftemp07+
             rnorm(nrow(d),sd=sigma[i]))-1)}else{0}
         })})}
 
@@ -132,7 +99,7 @@ fit2 <-jags(
   model.file= textConnection (
     "model {
     for (i in 1:N) {
-    lftpay[i]~dnorm(beta0[state[i],itemcode[i],type_of_gov[i]]+beta1[state[i],itemcode[i],type_of_gov[i]]*lftpay07[i],tau)}
+    lftemp[i]~dnorm(beta0[state[i],itemcode[i],type_of_gov[i]]+beta1[state[i],itemcode[i],type_of_gov[i]]*lftemp07[i],tau)}
     for (i1 in 1:dime[1]) {
     for (i2 in 1:dime[2]) {
     for (i3 in 1:dime[3]) {
@@ -163,14 +130,14 @@ predictions<-function(sims.list){
   dimnames(beta0)<-c(list(NULL),dimnamesd)
   dimnames(beta1)<-c(list(NULL),dimnamesd)
   plyr::aaply(1:n,1,function(i){
-    prediction=xy_aggr[,,,"ftpay"]+
+    prediction=xy_aggr[,,,"ftemp"]+
       plyr::daply(xr,.variables=~state+itemcode+type_of_gov,.fun = function(d){
         state=levels(d$state)[unique(d$state)]
         itemcode=levels(d$itemcode)[unique(d$itemcode)]
         type_of_gov=levels(d$type_of_gov)[unique(d$type_of_gov)]
         if(nrow(d)>0){
           sum(10^(beta0[i,state,itemcode,type_of_gov]+
-                    beta1[i,state,itemcode,type_of_gov]*d$lftpay07+
+                    beta1[i,state,itemcode,type_of_gov]*d$lftemp07+
                     rnorm(nrow(d),sd=sigma[i]))-1)}else{0}
       })})}
 
