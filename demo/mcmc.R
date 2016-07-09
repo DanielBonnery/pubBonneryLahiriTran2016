@@ -6,8 +6,6 @@ library(dataASPEP)
 library(ggplot2)
 data(aspep2007,aspep2011,aspep2012,aspep2007_gov)
 
-
-
 xys<-xysf(aspep2011,xyf())
 xr<-xrf(xyf(),xys)
 

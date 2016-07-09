@@ -1,5 +1,5 @@
 #Create a table for the population
-xyf<-function(){sqldf::sqldf("
+xyf<-function(aspep2007,aspep2012,aspep2007_gov){sqldf::sqldf("
                              select a.id,
                              d.type_of_gov,
                              a.itemcode,
