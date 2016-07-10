@@ -5,6 +5,8 @@ xyf<-function(aspep2007,aspep2012,aspep2007_gov){sqldf::sqldf("
                              a.itemcode,
                              d.state,
                              c.ftemp,
+                             c.ftemp as ftemp07, 
+                             a.ftemp as ftemp12, 
                              log10(a.ftemp) as lftemp07, 
                              log10(c.ftemp) as lftemp12 
                              from 
