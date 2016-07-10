@@ -34,6 +34,19 @@ save(plot2bis,file="figure/plot2bis.rda")
 
 
 
+plot2bisbis<-ggplot(data = xy, aes(x = lftemp07, y = lftemp12)) + 
+  stat_density2d(aes(alpha=..level..^.1, fill=..level..^.1), 
+                 size=2, 
+                 bins=4, 
+                 geom="polygon") + 
+  scale_fill_gradient(low = "yellow", high = "red") +
+  #scale_alpha(range = c(0.00, 1), guide = FALSE) +
+  geom_density2d(colour="grey", bins=4) +
+  guides(alpha=FALSE) +
+facet_wrap(~type_of_gov)
+  
+
+
 plot3<-ggplot(data = xy, aes(x = lftemp07, y = lftemp12)) +
   geom_point(size=1) +   geom_smooth(method="lm",se=FALSE) +geom_abline(slope=1,intercept=0,color="red")+
   facet_wrap(~state)

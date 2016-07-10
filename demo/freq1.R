@@ -1,0 +1,12 @@
+library(pubBonneryLahiriTran2016)
+library(sqldf)
+library(R2jags)
+library(dataASPEP)
+library(ggplot2)
+data(aspep2007,aspep2011,aspep2012,aspep2007_gov)
+xy<-xyf(aspep2007, aspep2012, aspep2007_gov)
+xys<-xysf(aspep2011,xy)
+
+library(lme4)
+lmerresults<-lmer(lftemp12~lftemp07+(lftemp07|state/type_of_gov/itemcode),data=xy)
+save(lmerresults,file="figure/lmerresults.rda")
