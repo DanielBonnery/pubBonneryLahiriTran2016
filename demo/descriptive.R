@@ -20,6 +20,15 @@ plot1<-ggplot(data = xy, aes(x = ftemp07, y = ftemp12)) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point() + facet_wrap(~type_of_gov)
 
-save(plot1,"figure/plot1.rda")
+save(plot1,file="figure/plot1.rda")
+
+plot2<-ggplot(data = xy, aes(x = lftemp07, y = lftemp12)) +
+  #  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point() + facet_wrap(~type_of_gov)
+
+save(plot2,file="figure/plot2.rda")
+
+
 
 plot(lm(log(1+lftemp12)~log(1+lftemp07),data=xy))
