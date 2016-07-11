@@ -8,6 +8,8 @@ data(aspep2007,aspep2011,aspep2012,aspep2007_gov)
 xy<-xyf(aspep2007, aspep2012, aspep2007_gov)
 xys<-xysf(aspep2011,xy)
 xr<-xrf(xy,xys)
+xr_aggr<-sqldf("select distinct state, itemcode, type_of_gov, count(*) as n, sum(ftemp07) as ftemp07,sum(ftemp12) as ftemp12, from xr
+               group by state, itemcode, type_of_gov")
 
 usefullvariables<-c("state","itemcode","type_of_gov","lftemp12","lftemp07")
 dime<-sapply(xys[c("state","itemcode","type_of_gov")],nlevels)
@@ -31,7 +33,7 @@ fit2 <-jags(
                   "tau_1"=matrix(1,2,3),
                   "sigma_1"=1)),
   n.chains =1,
-  parameters.to.save=c(outer(letters[1:4],1:3,paste0),,"beta0","beta1","tau","sigma"),
+  parameters.to.save=c(outer(letters[1:4],1:3,paste0),"beta0","beta1","tau","sigma"),
   n.iter =10 ,
   n.burnin =3 ,
   model.file= textConnection (
