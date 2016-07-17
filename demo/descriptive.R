@@ -65,5 +65,12 @@ plot4<-ggplot(data = xy, aes(x = lftemp07, y = lftemp12)) +
   facet_wrap(~itemcode)
 save(plot4,file="figure/plot4.rda")
 
+plot5<-ggplot(data=xy,aes(x=lftemp07))+geom_density()
+plot6<-ggplot(data=xy,aes(x=lftemp12))+geom_density()
+plot7<-ggplot(data=xy,aes(x=ftemp12-ftemp07))+geom_density()
+
+plot8<-ggplot(data=xy,aes(x=lftemp12-lftemp07))+geom_density()
+plot9<-ggplot(data=xy,aes(x=lftemp07,y=lftemp12))+geom_density()
+plot10<-ggplot(data=xy[xy$ftemp07==0,],aes(x=ftemp12))+geom_density()
 
 #plot(lm(log(1+lftemp12)~log(1+lftemp07),data=xy))
